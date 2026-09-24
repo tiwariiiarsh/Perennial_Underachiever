@@ -66,8 +66,13 @@ def pair_features(cands, s1_norm, pool_norm, chunk=50_000):
     left = list(zip(*[s1_norm[c].to_numpy()[cands.s1_idx.to_numpy()] for c in TEXT_COLS]))
     right = list(zip(*[pool_norm[c].to_numpy()[cands.pool_idx.to_numpy()] for c in TEXT_COLS]))
     jobs = [(left[i:i + chunk], right[i:i + chunk]) for i in range(0, len(left), chunk)]
-    with Pool(N_WORKERS) as p:
-        arr = np.vstack(p.map(_feat_chunk, jobs)) if jobs else np.zeros((0, len(FEAT_NAMES)), np.float32)
+    if not jobs:
+        arr = np.zeros((0, len(FEAT_NAMES)), np.float32)
+    elif len(left) < 20_000:                    # small (API) requests: no process pool
+        arr = np.vstack([_feat_chunk(j) for j in jobs])
+    else:
+        with Pool(N_WORKERS) as p:
+            arr = np.vstack(p.map(_feat_chunk, jobs))
     del left, right
     f = pd.DataFrame(arr, columns=FEAT_NAMES, index=cands.index)
     for c in ["blk_score", "blk_name", "blk_addr", "blk_mixed", "blk_nkeys", "blk_rank"]:

@@ -49,6 +49,9 @@ ADDR_GENERIC = {
 }
 
 
+LEET = {"0": "o", "1": "l", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b"}
+
+
 def skel(tok):
     """Consonant skeleton of an ASCII token."""
     t = tok.replace("ph", "f").replace("ck", "k").replace("x", "ks").replace("q", "k")
@@ -72,6 +75,8 @@ def _name_tokens(text):
     text = re.sub(r"\b(www\.)?([a-z0-9-]+)\.(com|net|org|in|co\.in|fr|biz|info|us|io)\b", r" \2 ", text)
     text = re.sub(r"\b([a-z])\.(?=[a-z]\b)", r"\1", text)       # p.c. / s.a.s -> pc / sas
     text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    # leetspeak / OCR digits inside words: tayl0r -> taylor, c1inic -> clinic
+    text = re.sub(r"(?<=[a-z])[0-9]|[0-9](?=[a-z])", lambda m: LEET.get(m.group(), m.group()), text)
     return text.split()
 
 

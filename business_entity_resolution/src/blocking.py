@@ -50,8 +50,10 @@ def record_keys(name_skel, alt, nums, addr_skel):
         keys.append(("nh:" + toks[0] + " " + num_list[0], 2))
         if len(toks) > 1:
             keys.append(("nh:" + toks[1] + " " + num_list[0], 2))
-    if toks and words:
-        keys.append(("nw:" + toks[0] + " " + words[0], 2))
+    for t in toks[:2]:
+        for w in dict.fromkeys(words[:6]):
+            if len(w) >= 3:
+                keys.append(("nw:" + t + " " + w, 2))
     return list(dict(keys).items())
 
 
@@ -70,8 +72,11 @@ def _keys_chunk(args):
 def build_keys(norm, chunk=100_000):
     cols = [norm[c].tolist() for c in ("name_skel", "alt", "nums", "addr_skel")]
     jobs = [(i, [c[i:i + chunk] for c in cols]) for i in range(0, len(norm), chunk)]
-    with Pool(N_WORKERS) as p:
-        parts = p.map(_keys_chunk, jobs)
+    if len(norm) < 20_000:                      # small (API) requests: no process pool
+        parts = [_keys_chunk(j) for j in jobs] or [_keys_chunk((0, [[] for _ in cols]))]
+    else:
+        with Pool(N_WORKERS) as p:
+            parts = p.map(_keys_chunk, jobs)
     return (np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts]),
             np.concatenate([p[2] for p in parts]))
 
