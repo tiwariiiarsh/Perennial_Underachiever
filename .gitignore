@@ -1,0 +1,10 @@
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+# large data / generated artefacts
+student_resource/dataset/
+business_entity_resolution/work/
+business_entity_resolution/models/
+business_entity_resolution/output/
+*.zip
