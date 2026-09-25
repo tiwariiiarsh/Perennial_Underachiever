@@ -88,7 +88,7 @@ def main():
     ablation["threshold_0.5_only"] = macro_f05(pred05, gt, list(sid))
     ablation["predict_nothing"] = macro_f05({}, gt, list(sid))
     best, best_p = -1, None
-    for margin, mp, miss in itertools.product([0.0, 0.05, 0.1], [0.2, 0.3, 0.4, 0.5, 0.6], [0.0, 0.1, 0.3]):
+    for margin, mp, miss in itertools.product([0.0, 0.05, 0.1, 0.15], [0.6, 0.65, 0.7, 0.75, 0.85], [0.3, 0.4, 0.5, 0.6]):
         prm = dict(margin=margin, min_prob=mp, miss=miss)
         f = score(prm)[0]
         if f > best:

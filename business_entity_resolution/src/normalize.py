@@ -46,6 +46,7 @@ ADDR_GENERIC = {
     "number", "box", "po", "p", "o", "near", "opposite", "behind", "the", "de", "du", "des",
     "la", "le", "les", "d", "l", "et", "and", "of", "plot", "flat", "shop", "office", "building",
     "bldg", "house", "h", "kh", "sector", "block", "bis", "ter", "b", "a", "c",
+    "cedex", "bp", "cs",
 }
 
 

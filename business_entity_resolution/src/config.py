@@ -13,7 +13,7 @@ N_WORKERS = os.cpu_count() or 4
 
 # ---- blocking ----
 KEY_MAX_DF = 300         # pool-side keys shared by more records than this are ignored (too common)
-TOP_K = 30               # candidates kept per Source-1 record
+TOP_K = 60               # candidates kept per Source-1 record
 BLOCK_CHUNK = 20_000     # Source-1 records processed per blocking chunk
 
 # ---- training ----

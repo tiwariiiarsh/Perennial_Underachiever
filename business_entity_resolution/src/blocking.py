@@ -48,6 +48,10 @@ def record_keys(name_skel, alt, nums, addr_skel):
         keys.append(("nh:" + toks[0] + " " + num_list[0], 2))
         if len(toks) > 1:
             keys.append(("nh:" + toks[1] + " " + num_list[0], 2))
+    if toks:
+        for n in num_list:
+            if len(n) in (5, 6):                # postal / PIN code
+                keys.append(("z:" + n + " " + toks[0], 2))
     for t in toks[:2]:
         for w in words[:4]:
             keys.append(("nw:" + t + " " + w, 2))
