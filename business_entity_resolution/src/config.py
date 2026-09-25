@@ -13,11 +13,11 @@ N_WORKERS = os.cpu_count() or 4
 
 # ---- blocking ----
 KEY_MAX_DF = 300         # pool-side keys shared by more records than this are ignored (too common)
-TOP_K = 20               # candidates kept per Source-1 record
+TOP_K = 30               # candidates kept per Source-1 record
 BLOCK_CHUNK = 20_000     # Source-1 records processed per blocking chunk
 
 # ---- training ----
-TRAIN_SAMPLE_S1 = 300_000  # Source-1 training entities used to fit the matcher
+TRAIN_SAMPLE_S1 = 200_000  # Source-1 training entities used to fit the matcher
 N_FOLDS = 5
 LGB_PARAMS = dict(
     objective="binary", learning_rate=0.08, num_leaves=127, min_child_samples=50,
