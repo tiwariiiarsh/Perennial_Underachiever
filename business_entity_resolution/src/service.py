@@ -13,7 +13,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from blocking import KEY_TYPES, PoolIndex, build_keys
+from blocking import KEY_TYPES, PoolIndex, build_keys, unpack
 from config import MODEL_DIR, TOP_K
 from decide import decide
 from features import FEAT_NAMES, pair_features
@@ -76,8 +76,8 @@ class Matcher:
     def compare(self, a, b):
         """Probability that two raw records are the same business + feature breakdown."""
         qa, qb = normalize_df(_records([a]), 1), normalize_df(_records([b]), 1)
-        ha, _, ta = build_keys(qa)
-        hb, _, _ = build_keys(qb)
+        ha, ta, _ = unpack(build_keys(qa))
+        hb, _, _ = unpack(build_keys(qb))
         shared = np.isin(ha, hb)
         pos = np.clip(np.searchsorted(self.index.ukeys, ha), 0, len(self.index.ukeys) - 1)
         known = self.index.ukeys[pos] == ha

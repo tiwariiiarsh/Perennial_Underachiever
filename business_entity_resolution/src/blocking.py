@@ -31,7 +31,7 @@ def record_keys(name_skel, alt, nums, addr_skel):
         c = "".join(tl)
         if len(c) >= 5:
             keys.append(("c:" + c, 0))
-    for a, b in combinations(sorted(toks[:5]), 2):
+    for a, b in combinations(sorted(toks[:4]), 2):
         keys.append(("p:" + a + " " + b, 0))
     words = []
     for seg in addr_skel.split("|") if addr_skel else ():
@@ -39,22 +39,26 @@ def record_keys(name_skel, alt, nums, addr_skel):
         words.extend(sw)
         for a, b in zip(sw, sw[1:]):
             keys.append(("a:" + a + " " + b, 1))
-        for w in sw:
-            if len(w) >= 3:
-                keys.append(("u:" + w, 1))
-    num_list = list(dict.fromkeys(nums.split()))[:3]
+    words = [w for w in dict.fromkeys(words) if len(w) >= 3]
+    num_list = list(dict.fromkeys(nums.split()))[:2]
     for n in num_list:
-        for w in words[:4]:
+        for w in words[:3]:
             keys.append(("h:" + n + " " + w, 1))
     if toks and num_list:
         keys.append(("nh:" + toks[0] + " " + num_list[0], 2))
         if len(toks) > 1:
             keys.append(("nh:" + toks[1] + " " + num_list[0], 2))
     for t in toks[:2]:
-        for w in dict.fromkeys(words[:6]):
-            if len(w) >= 3:
-                keys.append(("nw:" + t + " " + w, 2))
+        for w in words[:4]:
+            keys.append(("nw:" + t + " " + w, 2))
     return list(dict(keys).items())
+
+
+# Every (key, type, record) posting is packed into one uint64:
+#   bits 26..63 = 38-bit key hash, bits 24..25 = key type, bits 0..23 = record index (< 16.7M)
+# so the index is a single in-place-sorted array (no argsort copies) -> fits 10M+ records in 8 GB.
+REC_BITS, KEY_SHIFT = 24, 26
+REC_MASK = (1 << REC_BITS) - 1
 
 
 def _keys_chunk(args):
@@ -65,39 +69,61 @@ def _keys_chunk(args):
             ks.append(k)
             idx.append(offset + i)
             typ.append(t)
-    h = pd.util.hash_array(np.array(ks, dtype=object)) if ks else np.zeros(0, np.uint64)
-    return h, np.array(idx, np.int32), np.array(typ, np.int8)
+    if not ks:
+        return np.zeros(0, np.uint64)
+    h = pd.util.hash_array(np.array(ks, dtype=object)) >> np.uint64(KEY_SHIFT) << np.uint64(KEY_SHIFT)
+    return h | (np.array(typ, np.uint64) << np.uint64(REC_BITS)) | np.array(idx, np.uint64)
 
 
 def build_keys(norm, chunk=100_000):
+    """Packed uint64 postings for every record of `norm` (see bit layout above)."""
+    assert len(norm) <= REC_MASK, "record index does not fit in 24 bits; query in smaller chunks"
     cols = [norm[c].tolist() for c in ("name_skel", "alt", "nums", "addr_skel")]
     jobs = [(i, [c[i:i + chunk] for c in cols]) for i in range(0, len(norm), chunk)]
     if len(norm) < 20_000:                      # small (API) requests: no process pool
-        parts = [_keys_chunk(j) for j in jobs] or [_keys_chunk((0, [[] for _ in cols]))]
+        parts = [_keys_chunk(j) for j in jobs]
     else:
         with Pool(N_WORKERS) as p:
             parts = p.map(_keys_chunk, jobs)
-    return (np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts]),
-            np.concatenate([p[2] for p in parts]))
+    del cols, jobs
+    return np.concatenate(parts) if parts else np.zeros(0, np.uint64)
+
+
+def unpack(packed):
+    return (packed >> np.uint64(KEY_SHIFT)), ((packed >> np.uint64(REC_BITS)) & np.uint64(3)).astype(np.int8), \
+        (packed & np.uint64(REC_MASK)).astype(np.int32)
 
 
 class PoolIndex:
-    def __init__(self, pool_norm, max_df=KEY_MAX_DF):
-        h, idx, typ = build_keys(pool_norm)
-        order = np.argsort(h, kind="stable")
-        h, idx, typ = h[order], idx[order], typ[order]
-        uk, starts, counts = np.unique(h, return_index=True, return_counts=True)
+    def __init__(self, pool_norm, max_df=KEY_MAX_DF, step=20_000_000):
+        arr = build_keys(pool_norm)
+        arr.sort()                                            # in place
+        n = len(arr)
+        # posting-list boundaries, computed in slices to bound temporary memory
+        bounds = [np.zeros(1, np.int64)]
+        for a in range(1, n, step):
+            b = min(a + step, n)
+            k1 = arr[a:b] >> np.uint64(KEY_SHIFT)
+            k0 = arr[a - 1:b - 1] >> np.uint64(KEY_SHIFT)
+            bounds.append(np.flatnonzero(k1 != k0).astype(np.int64) + a)
+            del k0, k1
+        starts = np.concatenate(bounds)
+        counts = np.diff(np.append(starts, n))
         keep = counts <= max_df
         self.n = len(pool_norm)
-        self.ukeys, self.starts, self.counts = uk[keep], starts[keep], counts[keep]
-        self.utype = typ[self.starts]
+        self.starts, self.counts = starts[keep], counts[keep]
+        head = arr[self.starts]
+        self.ukeys = head >> np.uint64(KEY_SHIFT)
+        self.utype = ((head >> np.uint64(REC_BITS)) & np.uint64(3)).astype(np.int8)
         self.weight = np.log(self.n / self.counts).astype(np.float32)
-        self.recs = idx
-        del h, typ
+        self.recs = np.empty(n, np.int32)
+        for a in range(0, n, step):
+            self.recs[a:a + step] = (arr[a:a + step] & np.uint64(REC_MASK)).astype(np.int32)
+        del arr
 
     def query(self, s1_norm, top_k=TOP_K):
         """Return DataFrame(s1_idx, pool_idx, blk_score, blk_name, blk_addr, blk_mixed, blk_nkeys, blk_rank)."""
-        h, qidx, _ = build_keys(s1_norm)
+        h, _, qidx = unpack(build_keys(s1_norm))
         pos = np.searchsorted(self.ukeys, h)
         pos[pos >= len(self.ukeys)] = 0
         hit = self.ukeys[pos] == h
