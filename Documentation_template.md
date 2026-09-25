@@ -98,7 +98,7 @@ kept. Everything is numpy (sorted keys + `searchsorted` + `bincount`), which ind
 | v2 (+ leet repair, name×address-word keys, max_df 300) | 20 | 19.9 | **0.936** |
 | v2 | 40 | 39.4 | **0.947** |
 
-- **Candidate pairs generated:** TBD
+- **Candidate pairs generated:** 5,889,320 for the 200k-entity validation sample (29.4 per Source-1 entity, pair recall **0.939**); for test ≈30 per Source-1 entity (see `output/candidate_pairs.tsv`). Reduction ratio vs. the full cross product ≈ 1 − 30/10⁷ ≈ 99.9997%.
 - **How true matches were not lost:** missed-pair analysis after every blocking change (`src/eval_blocking.py
   --show-misses`) drove each key type: skeletons for transliteration/typos, concatenated skeletons for domain
   names, order-free name×address-word keys for reordered addresses without house numbers, and a high df cap with
@@ -110,7 +110,7 @@ kept. Everything is numpy (sorted keys + `searchsorted` + `bincount`), which ind
 
 ## 4. Matching Model
 
-**Features used** (`src/features.py`, 36 features):
+**Features used** (`src/features.py`, 36 features). Top features by gain: total blocking idf score, candidate rank, name×address key score, house-number Jaccard, address token-set ratio, concatenated-skeleton ratio, pool-side number count, name Jaro-Winkler, partial ratio, legal-suffix agreement.
 - **Name:** rapidfuzz token-set / token-sort / plain / partial ratios and Jaro-Winkler on the transliterated core
   name (max over main name and alias), same ratios on skeleton strings and concatenated skeletons, skeleton-token
   Jaccard and overlap count, token counts, first-token equality, legal-suffix agreement (+1 agree / −1 conflict /
@@ -133,24 +133,24 @@ No pretrained language model is used (well under the 8B-parameter limit).
    `E[F0.5](k) ≈ 1.25·Σ_{i≤k} p_i / (0.25·(Σp + miss) + k)`, versus `E[F0.5](0) = Π(1−p_i)` for the empty list.
 3. *Probability floor:* never predict pairs with calibrated p below `min_prob`.
 
-Chosen parameters: TBD
+Chosen parameters (grid search on OOF macro F0.5): `margin = 0.1`, `min_prob = 0.6`, `miss = 0.3`.
 
 ---
 
 ## 5. Results & Error Analysis
 
-- **F_0.5 Score (macro, OOF validation on 200k S1 entities):** TBD
-- **Per country:** TBD
-- **Pair-level ROC-AUC / PR-AUC:** TBD
+- **F_0.5 Score (macro, OOF validation on 200k S1 entities):** **0.9383**
+- **Per country:** US 0.9476 · India 0.9242
+- **Pair-level ROC-AUC / PR-AUC:** 0.99935 / 0.99505 (5 folds, AUC 0.99931–0.99936)
 
 **Decision-logic ablation (OOF macro F0.5):**
 
 | Configuration | Macro F0.5 |
 |---|---|
-| Predict nothing (floor = singleton rate) | TBD |
-| Calibrated p ≥ 0.5 | TBD |
-| Expected-F0.5 selection, no one-owner | TBD |
-| + one-owner rule (final) | TBD |
+| Predict nothing (floor = singleton rate) | 0.0562 |
+| Calibrated p ≥ 0.5 | 0.9319 |
+| Expected-F0.5 selection + probability floor, no one-owner | 0.9379 |
+| + one-owner rule with margin (final) | **0.9383** |
 
 - **Common false positives (wrong merges):** sibling businesses sharing a building and a generic name token
   (`Blue Foundation` vs `Blue Software` at the same address), chains of the same brand in one city, and records
@@ -192,7 +192,11 @@ README.md  requirements.txt
 Entry point: `python src/run_pipeline.py` (normalise → train if needed → block/score/decide test → write
 `output/matching_results.tsv` and `output/candidate_pairs.tsv`).
 
-### B. Fair play / licences
+### B. Training run
+
+Training (200k S1 entities, 5.9M pairs) took 24 min wall-clock on 8 CPU cores with 4.0 GB peak RAM; LightGBM folds took ~80 s each.
+
+### C. Fair play / licences
 
 No external databases, APIs, geocoders, web lookups or pretrained models were used; all signal comes from the
 provided training files. Libraries: pandas, numpy, pyarrow, scikit-learn (BSD), LightGBM (MIT), rapidfuzz (MIT),
