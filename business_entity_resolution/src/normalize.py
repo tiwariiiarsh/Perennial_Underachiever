@@ -45,7 +45,14 @@ ADDR_GENERIC = {
     "impasse", "allee", "apartment", "suite", "unit", "floor", "ground", "first", "second",
     "number", "box", "po", "p", "o", "near", "opposite", "behind", "the", "de", "du", "des",
     "la", "le", "les", "d", "l", "et", "and", "of", "plot", "flat", "shop", "office", "building",
-    "bldg", "house", "h", "kh", "sector", "block", "bis", "ter", "b", "a", "c",
+    "bldg", "house", "h", "kh", "sector", "block", "bis", "ter", "b", "a", "c", "cedex", "bp", "cs",
+}
+
+STATE_ABBR = {
+    "maharashtra": "mh", "karnataka": "ka", "telangana": "tg", "tamil nadu": "tn",
+    "delhi": "dl", "gujarat": "gj", "new york": "ny", "california": "ca",
+    "texas": "tx", "florida": "fl", "illinois": "il", "pennsylvania": "pa",
+    "andhra pradesh": "ap", "west bengal": "wb", "rajasthan": "rj", "uttar pradesh": "up"
 }
 
 
@@ -114,6 +121,7 @@ def _addr_parse(raw):
             nums.append(re.sub(r"\D", "", m.group()).lstrip("0") or "0")
         toks = re.sub(r"[^a-z ]+", " ", seg).split()
         toks = [ADDR_ABBR.get(t, t) for t in toks]
+        toks = [STATE_ABBR.get(t, t) for t in toks]
         words.extend(toks)
         seg_words.append([t for t in toks if t not in ADDR_GENERIC])
     return nums, words, seg_words

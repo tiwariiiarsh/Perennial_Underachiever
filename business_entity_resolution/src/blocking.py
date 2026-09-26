@@ -40,14 +40,19 @@ def record_keys(name_skel, alt, nums, addr_skel):
         for a, b in zip(sw, sw[1:]):
             keys.append(("a:" + a + " " + b, 1))
     words = [w for w in dict.fromkeys(words) if len(w) >= 3]
-    num_list = list(dict.fromkeys(nums.split()))[:2]
-    for n in num_list:
+    num_list = list(dict.fromkeys(nums.split()))[:4]
+    for n in num_list[:2]:
         for w in words[:3]:
             keys.append(("h:" + n + " " + w, 1))
     if toks and num_list:
         keys.append(("nh:" + toks[0] + " " + num_list[0], 2))
         if len(toks) > 1:
             keys.append(("nh:" + toks[1] + " " + num_list[0], 2))
+    # Postal code + name anchor (5 digits for France/US, 6 digits for India)
+    for n in num_list:
+        if len(n) in (5, 6) and toks:
+            keys.append(("z:" + n + " " + toks[0], 2))
+            break
     for t in toks[:2]:
         for w in words[:4]:
             keys.append(("nw:" + t + " " + w, 2))

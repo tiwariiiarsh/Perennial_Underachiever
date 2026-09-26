@@ -90,7 +90,7 @@ class Matcher:
         prob = float(cands.prob.iloc[0])
         return {"probability": round(prob, 4), "match": prob >= self.params["min_prob"],
                 "normalized_a": qa.iloc[0].to_dict(), "normalized_b": qb.iloc[0].to_dict(),
-                "features": {k: round(float(X[k].iloc[0]), 3) for k in FEAT_NAMES + ["blk_score"]}}
+                "features": {k: round(float(X[k].iloc[0]), 3) for k in list(X.columns) if k in FEAT_NAMES}}
 
     def batch(self, df):
         """df in Source-1 format -> DataFrame(source1_entity_id, matched_entity_ids)."""
