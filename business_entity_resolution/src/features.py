@@ -85,4 +85,5 @@ def pair_features(cands, s1_norm, pool_norm, chunk=50_000):
     f["nonlatin2"] = pool_norm.nonlatin_name.to_numpy()[cands.pool_idx.to_numpy()]
     # within-S1 relative name score
     f["n_tset_rel"] = f.n_tset - f.groupby(cands.s1_idx).n_tset.transform("max")
+    f["is_same_bldg_diff_biz"] = ((f["num_jac"] >= 0.95) & (f["n_jw"] < 0.65)).astype(np.int8)
     return f
