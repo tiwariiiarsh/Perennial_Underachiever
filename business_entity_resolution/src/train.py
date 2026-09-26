@@ -8,6 +8,7 @@
 * A final model is refit on all sampled pairs and saved with the calibrator,
   decision parameters and a metrics report.
 """
+import gc
 import itertools
 import json
 import pickle
@@ -44,23 +45,40 @@ def main():
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     s1, pool = get_norm("train")
     gt = load_ground_truth()
+
     log("building pool index")
     index = PoolIndex(pool)
+
+    # Sample s1 and immediately delete the original DataFrame
     samp = s1.sample(min(TRAIN_SAMPLE_S1, len(s1)), random_state=SEED).reset_index(drop=True)
     del s1
+    gc.collect()
+
     log("blocking", len(samp))
     cands = index.query(samp, TOP_K)
+
+    # Free index immediately after candidate pair generation
     del index
+    gc.collect()
+
+    # Pre-extract lightweight numpy arrays needed for scoring and reporting
     pid = pool.entity_id.to_numpy()
     sid = samp.entity_id.to_numpy()
+    countries = samp.country.to_numpy()
+
     y = np.fromiter((p in gt[s] for s, p in zip(sid[cands.s1_idx], pid[cands.pool_idx])),
                     bool, len(cands)).astype(np.int8)
     n_true = sum(len(gt[s]) for s in sid)
     blk_recall = y.sum() / n_true
     log(f"candidates={len(cands)} per_s1={len(cands)/len(samp):.1f} pair_recall={blk_recall:.4f}")
+
     log("features")
     X = pair_features(cands, samp, pool)
     feats = list(X.columns)
+
+    # Free heavy raw string DataFrames before starting LightGBM
+    del pool, samp
+    gc.collect()
 
     oof = np.zeros(len(X))
     for fold, (tr, va) in enumerate(GroupKFold(N_FOLDS).split(X, y, cands.s1_idx)):
@@ -68,6 +86,9 @@ def main():
         m.fit(X.iloc[tr], y[tr])
         oof[va] = m.predict_proba(X.iloc[va])[:, 1]
         log(f"fold {fold} auc={roc_auc_score(y[va], oof[va]):.5f}")
+        del m
+        gc.collect()
+
     auc, ap = roc_auc_score(y, oof), average_precision_score(y, oof)
     iso = IsotonicRegression(out_of_bounds="clip").fit(oof, y)
     cands = cands[["s1_idx", "pool_idx"]].copy()
@@ -110,9 +131,9 @@ def main():
     imp = dict(sorted(zip(feats, final.booster_.feature_importance("gain").round(1).tolist()),
                       key=lambda kv: -kv[1]))
     metrics = dict(
-        n_train_s1=len(samp), top_k=TOP_K, candidates_per_s1=round(len(cands) / len(samp), 2),
+        n_train_s1=len(sid), top_k=TOP_K, candidates_per_s1=round(len(cands) / len(sid), 2),
         blocking_pair_recall=round(float(blk_recall), 4), pair_auc=round(auc, 5), pair_ap=round(ap, 5),
-        oof_macro_f05=round(f_best, 4), per_country_f05=per_country(pred, gt, list(sid), samp.country),
+        oof_macro_f05=round(f_best, 4), per_country_f05=per_country(pred, gt, list(sid), countries),
         decision_params=best_p, ablation=ablation, feature_importance=imp, features=feats,
     )
     json.dump(metrics, open(MODEL_DIR / "metrics.json", "w"), indent=2)
