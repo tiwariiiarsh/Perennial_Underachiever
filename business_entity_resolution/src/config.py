@@ -9,15 +9,15 @@ WORK_DIR = Path(os.environ.get("ER_WORK_DIR", ROOT / "work"))      # cached inte
 MODEL_DIR = Path(os.environ.get("ER_MODEL_DIR", ROOT / "models"))
 
 SEED = 42
-N_WORKERS = os.cpu_count() or 4
+N_WORKERS = 2
 
 # ---- blocking ----
 KEY_MAX_DF = 300         # pool-side keys shared by more records than this are ignored (too common)
-TOP_K = 60              # candidates kept per Source-1 record
+TOP_K = 40              # candidates kept per Source-1 record
 BLOCK_CHUNK = 20_000     # Source-1 records processed per blocking chunk
 
 # ---- training ----
-TRAIN_SAMPLE_S1 = 1_000_000  # Source-1 training entities used to fit the matcher
+TRAIN_SAMPLE_S1 = 300_000  # Source-1 training entities used to fit the matcher
 N_FOLDS = 5
 
 LGB_PARAMS = dict(
